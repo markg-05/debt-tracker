@@ -590,7 +590,7 @@
     const blob = new Blob([serialize()], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `marker-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `the-tab-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
@@ -610,7 +610,7 @@
       changed('Import backup');
       toast('Backup merged');
     } catch {
-      toast('That file isn’t a Marker backup');
+      toast('That file isn’t a backup from The Tab');
     }
   });
 

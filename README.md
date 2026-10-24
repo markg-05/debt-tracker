@@ -1,4 +1,4 @@
-# Marker
+# The Tab
 
 A running tab between Mark and Milo — poker nights, blackjack, food. Log who owes whom, record payments, and see at a glance who's up.
 
