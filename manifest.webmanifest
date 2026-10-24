@@ -1,0 +1,13 @@
+{
+  "name": "Marker",
+  "short_name": "Marker",
+  "description": "A running tab between two friends.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0c0c0d",
+  "theme_color": "#0c0c0d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
