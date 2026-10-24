@@ -117,7 +117,8 @@ button:disabled { cursor: default; }
   padding: 0 2px 4px;
 }
 .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.wordmark { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; }
+.wordmark { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; white-space: nowrap; }
+@media (max-width: 360px) { .brand-sub { display: none; } }
 .brand-sub {
   font-size: 13px;
   color: var(--text-3);
@@ -563,32 +564,29 @@ button:disabled { cursor: default; }
 .group .hint { font-size: 13px; margin-bottom: 4px; }
 .hint a { color: var(--text); text-underline-offset: 2px; }
 .hint b { color: var(--text-2); font-weight: 500; }
-.sync-status { margin: 0; font-size: 14px; color: var(--text-2); }
-.sync-status::before {
-  content: "";
-  display: inline-block;
-  width: 7px; height: 7px;
-  margin-right: 8px;
-  border-radius: 50%;
-  vertical-align: 1px;
-  background: var(--text-4);
+/* sync status in the header — tap to sync */
+.top-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.sync-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 30px;
+  padding: 0 11px 0 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: background var(--fast), color var(--fast);
 }
-.sync-status[data-status="ok"]::before { background: #30a46c; }
-.sync-status[data-status="error"]::before { background: var(--danger); }
-.sync-status[data-status="readonly"]::before { background: #f5a524; }
-
-/* a dot on the settings button when saving is stuck */
-#openSettings { position: relative; }
-#openSettings[data-sync="error"]::after,
-#openSettings[data-sync="readonly"]::after {
-  content: "";
-  position: absolute; top: 8px; right: 8px;
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--danger);
-  box-shadow: 0 0 0 2px var(--bg);
-}
-#openSettings[data-sync="readonly"]::after { background: #f5a524; }
+.sync-pill:hover { background: var(--hover); color: var(--text); }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); flex: none; }
+.sync-pill[data-status="ok"] .sync-dot { background: #30a46c; }
+.sync-pill[data-status="error"] .sync-dot { background: var(--danger); }
+.sync-pill[data-status="readonly"] .sync-dot { background: #f5a524; }
+.sync-pill[data-status="error"], .sync-pill[data-status="readonly"] { color: var(--text-2); }
+.sync-pill[data-status="syncing"] .sync-dot,
+.sync-pill[data-status="pending"] .sync-dot { animation: pulse 1s ease-in-out infinite alternate; }
+@keyframes pulse { to { opacity: 0.3; } }
 .list { display: grid; border-radius: var(--r-md); overflow: hidden; background: var(--well); }
 .list button {
   display: flex; align-items: center; gap: 12px;

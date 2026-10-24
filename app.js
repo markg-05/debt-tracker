@@ -394,7 +394,6 @@
     $('#nameA').value = state.players.a;
     $('#nameB').value = state.players.b;
     $('#tokenInput').value = getToken();
-    renderSyncStatus();
     settings.showModal();
   });
   for (const [id, seat] of [['#nameA', 'a'], ['#nameB', 'b']]) {
@@ -512,25 +511,27 @@
     sync.status = status;
     sync.error = error;
     if (status === 'ok') sync.at = Date.now();
-    $('#openSettings').dataset.sync = status;
     renderSyncStatus();
   }
 
+  const needsToken = () => sync.status === 'readonly' || (sync.status === 'error' && [401, 403].includes(sync.error));
+
   function renderSyncStatus() {
-    const node = $('#syncStatus');
-    if (!node) return;
-    const text = {
-      idle: 'Not synced yet.',
-      pending: 'Saving shortly…',
-      syncing: 'Syncing…',
-      ok: `Synced ${sync.at ? new Date(sync.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''}.`,
-      readonly: 'Read-only on this device — add a token below to save changes.',
+    const btn = $('#syncBtn');
+    const time = sync.at ? new Date(sync.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '';
+    const [label, title] = {
+      idle: ['Not synced', 'Tap to sync'],
+      pending: ['Saving…', 'Saves a few seconds after each change'],
+      syncing: ['Syncing…', 'Talking to GitHub'],
+      ok: [`Synced ${time}`, 'Tap to check for new entries'],
+      readonly: ['Read-only', 'Add a GitHub token in Settings to save changes'],
       error: sync.error === 401 || sync.error === 403
-        ? 'GitHub rejected the token. Check it below.'
-        : 'Couldn’t reach GitHub. Changes are kept here and will save later.',
+        ? ['Token rejected', 'GitHub rejected the token — check it in Settings']
+        : ['Offline', 'Couldn’t reach GitHub. Changes are kept here; tap to retry'],
     }[sync.status];
-    node.textContent = text;
-    node.dataset.status = sync.status;
+    $('#syncStatus').textContent = label;
+    btn.title = title;
+    btn.dataset.status = sync.status;
   }
 
   function syncNow() {
@@ -577,7 +578,12 @@
     setStatus('pending');
   }
 
-  $('#syncBtn').addEventListener('click', () => syncNow());
+  // tapping the status syncs; if there's no working token, it opens Settings instead
+  $('#syncBtn').addEventListener('click', () => {
+    if (!needsToken()) { syncNow(); return; }
+    $('#openSettings').click();
+    $('#tokenInput').focus();
+  });
   const tokenInput = $('#tokenInput');
   tokenInput.addEventListener('change', () => {
     setToken(tokenInput.value.trim());

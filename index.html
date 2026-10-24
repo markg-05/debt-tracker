@@ -26,9 +26,15 @@
         <span class="wordmark">The Tab</span>
         <span class="brand-sub" id="subtitle"></span>
       </div>
-      <button class="icon-btn" id="openSettings" type="button" aria-label="Settings">
-        <svg viewBox="0 0 24 24" class="i" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
-      </button>
+      <div class="top-actions">
+        <button class="sync-pill" id="syncBtn" type="button" data-status="idle">
+          <span class="sync-dot" aria-hidden="true"></span>
+          <span id="syncStatus">Syncing…</span>
+        </button>
+        <button class="icon-btn" id="openSettings" type="button" aria-label="Settings">
+          <svg viewBox="0 0 24 24" class="i" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+        </button>
+      </div>
     </header>
 
     <!-- Balance: who's up, and by how much -->
@@ -123,14 +129,9 @@
       </div>
       <div class="group">
         <h4>Sync</h4>
-        <p class="sync-status" id="syncStatus"></p>
         <label class="field"><span>GitHub token</span><input id="tokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
         <p class="hint">Needed once per phone to save changes. Create a <a href="https://github.com/settings/personal-access-tokens/new?name=The+Tab&description=Sync+for+The+Tab&target_name=markg-05&expires_in=none&contents=write" target="_blank" rel="noopener">fine-grained token</a> for <b>markg-05/debt-tracker</b> with <b>Contents: Read and write</b>. It stays on this device.</p>
         <div class="list">
-          <button type="button" id="syncBtn">
-            <svg viewBox="0 0 24 24" class="i" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1L19.5 9M19.5 4.5V9H15M19.5 12a7.5 7.5 0 0 1-13 5.1L4.5 15M4.5 19.5V15H9"/></svg>
-            <span>Sync now</span>
-          </button>
           <button type="button" id="exportBtn">
             <svg viewBox="0 0 24 24" class="i" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>
             <span>Export backup</span>
