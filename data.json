@@ -1,5 +1,36 @@
 {
   "v": 1,
-  "players": { "a": "Mark", "b": "Milo" },
-  "entries": []
+  "players": {
+    "a": "Mark",
+    "b": "Milo"
+  },
+  "entries": [
+    {
+      "id": "mvlq47q75v75og",
+      "kind": "debt",
+      "from": "b",
+      "amount": 1000,
+      "note": "",
+      "ts": 1792805518879,
+      "tag": null
+    },
+    {
+      "id": "mvlq4i19v7cqhm",
+      "kind": "payout",
+      "from": "b",
+      "amount": 5000,
+      "note": "",
+      "ts": 1792805532237,
+      "method": "etransfer"
+    },
+    {
+      "id": "mvlq4l5i7ly1i0",
+      "kind": "payout",
+      "from": "a",
+      "amount": 4000,
+      "note": "",
+      "ts": 1792805536278,
+      "method": "etransfer"
+    }
+  ]
 }
