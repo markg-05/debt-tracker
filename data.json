@@ -12,7 +12,8 @@
       "amount": 1000,
       "note": "",
       "ts": 1792805518879,
-      "tag": null
+      "tag": null,
+      "deleted": 1792810748613
     },
     {
       "id": "mvlq4i19v7cqhm",
@@ -21,7 +22,8 @@
       "amount": 5000,
       "note": "",
       "ts": 1792805532237,
-      "method": "etransfer"
+      "method": "etransfer",
+      "deleted": 1792810748613
     },
     {
       "id": "mvlq4l5i7ly1i0",
@@ -30,7 +32,8 @@
       "amount": 4000,
       "note": "",
       "ts": 1792805536278,
-      "method": "etransfer"
+      "method": "etransfer",
+      "deleted": 1792810748613
     }
   ]
 }
