@@ -383,7 +383,7 @@
     save();
     entryDlg.close();
     render();
-    changed(`Delete: ${sentence(e)} ${money(e.amount)}`);
+    changed();
     toast('Entry deleted', () => { delete e.deleted; save(); render(); });
   });
 
@@ -393,7 +393,7 @@
   $('#openSettings').addEventListener('click', () => {
     $('#nameA').value = state.players.a;
     $('#nameB').value = state.players.b;
-    $('#tokenInput').value = getToken();
+    $('#passcodeInput').value = getPasscode();
     settings.showModal();
   });
   for (const [id, seat] of [['#nameA', 'a'], ['#nameB', 'b']]) {
@@ -413,30 +413,27 @@
     for (const e of state.entries) if (!e.deleted) e.deleted = now;
     save();
     render();
-    changed('Clear everything');
+    changed();
     toast('Cleared');
   });
 
-  // ───────── GitHub sync ─────────
-  // The shared tab is data.json on the repo's `data` branch. Anyone can read it;
-  // saving needs a fine-grained token with Contents read/write on this repo.
+  // ───────── Sync ─────────
+  // The shared tab lives in a Supabase database, reachable only through one
+  // function, tab_sync: send it whatever this device has that the server might
+  // not, and it merges that in and hands back every entry. It's locked with a
+  // shared passcode, entered once per phone or opened from an invite link.
 
-  const REMOTE = { owner: 'markg-05', repo: 'debt-tracker', branch: 'data', path: 'data.json' };
-  const API = `https://api.github.com/repos/${REMOTE.owner}/${REMOTE.repo}/contents/${REMOTE.path}`;
-  const TOKEN_KEY = 'marker.token';
+  const DB = {
+    url: 'https://drflsqoidhvdjlhlvxlk.supabase.co/rest/v1/rpc/tab_sync',
+    key: 'sb_publishable_WWqS2oOQAXrixTkwko5rlg_qZi9RHzd', // publishable; the passcode is the lock
+  };
+  const PASSCODE_KEY = 'marker.passcode';
   const SAVE_DELAY = 6000; // longer than the undo window, so undone actions never leave the device
 
-  const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
-  const setToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch {} };
-
-  const toB64 = (str) => {
-    const bytes = new TextEncoder().encode(str);
-    let s = '';
-    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-    return btoa(s);
-  };
-  const fromB64 = (b64) =>
-    new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, '')), (ch) => ch.charCodeAt(0)));
+  const getPasscode = () => { try { return localStorage.getItem(PASSCODE_KEY) || ''; } catch { return ''; } };
+  const setPasscode = (p) => { try { p ? localStorage.setItem(PASSCODE_KEY, p) : localStorage.removeItem(PASSCODE_KEY); } catch {} };
+  // left over from GitHub sync
+  try { localStorage.removeItem('marker.token'); } catch {}
 
   function clean(e) {
     if (!e || typeof e.id !== 'string' || !Number.isInteger(e.amount) || e.amount <= 0) return null;
@@ -464,35 +461,28 @@
     return changed;
   }
 
-  // does this device have anything the file is missing?
-  function ahead(remote) {
+  // the server's entries as of the last sync; null until the first one
+  let remote = null;
+
+  // what this device has that the server is missing (everything, before the first sync)
+  function unsent() {
+    if (!remote) return state.entries;
     const byId = new Map(remote.map((e) => [e.id, e]));
-    return state.entries.some((e) => {
+    return state.entries.filter((e) => {
       const r = byId.get(e.id);
       return !r || (e.deleted && !r.deleted);
     });
   }
 
-  async function gh(url, opts = {}) {
-    const token = getToken();
-    return fetch(url, {
-      ...opts,
+  async function exchange(entries) {
+    const res = await fetch(DB.url, {
+      method: 'POST',
       cache: 'no-store',
-      headers: {
-        Accept: 'application/vnd.github+json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
-      },
+      headers: { apikey: DB.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_key: getPasscode(), p_entries: entries }),
     });
-  }
-
-  async function pullRemote() {
-    const res = await gh(`${API}?ref=${REMOTE.branch}`);
-    if (res.status === 404) return { sha: null, entries: [] };
-    if (!res.ok) throw Object.assign(new Error('pull'), { status: res.status });
-    const file = await res.json();
-    const data = JSON.parse(fromB64(file.content) || '{}');
-    return { sha: file.sha, entries: (data.entries || []).map(clean).filter(Boolean) };
+    if (!res.ok) throw Object.assign(new Error('sync'), { status: res.status });
+    return (await res.json()).map(clean).filter(Boolean);
   }
 
   const serialize = () => JSON.stringify({
@@ -505,7 +495,6 @@
   let syncing = null;
   let again = false;
   let saveTimer = 0;
-  let commitMessage = '';
 
   function setStatus(status, error = 0) {
     sync.status = status;
@@ -514,7 +503,7 @@
     renderSyncStatus();
   }
 
-  const needsToken = () => sync.status === 'readonly' || (sync.status === 'error' && [401, 403].includes(sync.error));
+  const needsPasscode = () => sync.status === 'locked' || (sync.status === 'error' && sync.error === 403);
 
   function renderSyncStatus() {
     const btn = $('#syncBtn');
@@ -522,12 +511,12 @@
     const [label, title] = {
       idle: ['Not synced', 'Tap to sync'],
       pending: ['Saving…', 'Saves a few seconds after each change'],
-      syncing: ['Syncing…', 'Talking to GitHub'],
+      syncing: ['Syncing…', 'Talking to the server'],
       ok: [`Synced ${time}`, 'Tap to check for new entries'],
-      readonly: ['Read-only', 'Add a GitHub token in Settings to save changes'],
-      error: sync.error === 401 || sync.error === 403
-        ? ['Token rejected', 'GitHub rejected the token — check it in Settings']
-        : ['Offline', 'Couldn’t reach GitHub. Changes are kept here; tap to retry'],
+      locked: ['Not set up', 'Add the passcode in Settings to sync'],
+      error: sync.error === 403
+        ? ['Wrong passcode', 'The server rejected the passcode — check it in Settings']
+        : ['Offline', 'Couldn’t reach the server. Changes are kept here; tap to retry'],
     }[sync.status];
     $('#syncStatus').textContent = label;
     btn.title = title;
@@ -539,27 +528,13 @@
     saveTimer = 0;
     if (syncing) { again = true; return syncing; }
     syncing = (async () => {
-      setStatus('syncing');
       try {
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const remote = await pullRemote();
-          if (absorb(remote.entries)) { save(); render(); }
-          if (!ahead(remote.entries)) { commitMessage = ''; setStatus('ok'); return; }
-          if (!getToken()) { setStatus('readonly'); return; }
-          const res = await gh(API, {
-            method: 'PUT',
-            body: JSON.stringify({
-              message: commitMessage || 'Update tab',
-              content: toB64(serialize()),
-              branch: REMOTE.branch,
-              ...(remote.sha ? { sha: remote.sha } : {}),
-            }),
-          });
-          if (res.ok) { commitMessage = ''; setStatus('ok'); return; }
-          // someone else saved first: pull their version and try again
-          if (res.status !== 409 && res.status !== 422) throw Object.assign(new Error('push'), { status: res.status });
-        }
-        throw new Error('conflict');
+        if (!getPasscode()) { setStatus('locked'); return; }
+        setStatus('syncing');
+        // the server merges atomically, so both phones saving at once is fine
+        remote = await exchange(unsent().map(clean).filter(Boolean));
+        if (absorb(remote)) { save(); render(); }
+        setStatus('ok');
       } catch (err) {
         setStatus('error', err.status || 0);
       } finally {
@@ -571,23 +546,41 @@
   }
 
   // called after every change on this device
-  function changed(message) {
-    commitMessage = commitMessage ? 'Update tab' : message;
+  function changed() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(syncNow, SAVE_DELAY);
     setStatus('pending');
   }
 
-  // tapping the status syncs; if there's no working token, it opens Settings instead
+  // tapping the status syncs; without a working passcode it opens Settings instead
   $('#syncBtn').addEventListener('click', () => {
-    if (!needsToken()) { syncNow(); return; }
+    if (!needsPasscode()) { syncNow(); return; }
     $('#openSettings').click();
-    $('#tokenInput').focus();
+    $('#passcodeInput').focus();
   });
-  const tokenInput = $('#tokenInput');
-  tokenInput.addEventListener('change', () => {
-    setToken(tokenInput.value.trim());
+  const passcodeInput = $('#passcodeInput');
+  passcodeInput.addEventListener('change', () => {
+    setPasscode(passcodeInput.value.trim());
     syncNow();
+  });
+
+  // the invite link carries the passcode, so the other phone is set up in one tap
+  const inviteBtn = $('#inviteBtn');
+  inviteBtn.addEventListener('click', async () => {
+    if (!getPasscode()) { passcodeInput.focus(); return; }
+    const url = `${location.origin}${location.pathname}#join=${encodeURIComponent(getPasscode())}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'The Tab', url }); } catch {}
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      // the settings sheet covers the toast, so say it on the button
+      $('span', inviteBtn).textContent = 'Link copied';
+      setTimeout(() => { $('span', inviteBtn).textContent = 'Share invite link'; }, 2000);
+    } catch {
+      prompt('Copy this invite link:', url);
+    }
   });
 
   // ───────── Backup ─────────
@@ -613,7 +606,7 @@
       if (!absorb(list)) { toast('Nothing new in that backup'); return; }
       save();
       render();
-      changed('Import backup');
+      changed();
       toast('Backup merged');
     } catch {
       toast('That file isn’t a backup from The Tab');
@@ -700,7 +693,7 @@
     el.note.blur();
     buzz();
     render();
-    changed(`${sentence(entry)} ${money(cents)}`);
+    changed();
     toast(`${sentence(entry)} ${money(cents)}`, () => {
       state.entries = state.entries.filter((x) => x.id !== entry.id);
       save();
@@ -735,6 +728,17 @@
   });
 
   // ───────── Boot ─────────
+
+  // opened from an invite link: keep the passcode, then drop it from the address bar
+  function joinFromLink() {
+    const join = new URLSearchParams(location.hash.slice(1)).get('join');
+    if (!join) return false;
+    setPasscode(join.trim());
+    history.replaceState(null, '', location.pathname + location.search);
+    return true;
+  }
+  joinFromLink();
+  window.addEventListener('hashchange', () => { if (joinFromLink()) syncNow(); });
 
   render();
   syncNow();

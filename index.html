@@ -129,9 +129,13 @@
       </div>
       <div class="group">
         <h4>Sync</h4>
-        <label class="field"><span>GitHub token</span><input id="tokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
-        <p class="hint">Needed once per phone to save changes. Create a <a href="https://github.com/settings/personal-access-tokens/new?name=The+Tab&description=Sync+for+The+Tab&target_name=markg-05&expires_in=none&contents=write" target="_blank" rel="noopener">fine-grained token</a> for <b>markg-05/debt-tracker</b> with <b>Contents: Read and write</b>. It stays on this device.</p>
+        <label class="field"><span>Passcode</span><input id="passcodeInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="xxxx-xxxx-xxxx"></label>
+        <p class="hint">Both phones share the tab through a database locked with this passcode. Enter it once per phone, or send the other phone an invite link.</p>
         <div class="list">
+          <button type="button" id="inviteBtn">
+            <svg viewBox="0 0 24 24" class="i" aria-hidden="true"><path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1"/></svg>
+            <span>Share invite link</span>
+          </button>
           <button type="button" id="exportBtn">
             <svg viewBox="0 0 24 24" class="i" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>
             <span>Export backup</span>

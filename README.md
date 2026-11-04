@@ -16,12 +16,17 @@ Static HTML/CSS/JS, no build step, no server. Hosted on GitHub Pages.
 
 ## Sync
 
-The shared tab is [`data.json` on the `data` branch](https://github.com/markg-05/debt-tracker/blob/data/data.json). The app reads it on open and whenever it comes back to the foreground, and saves a few seconds after each change — every save is a commit, so the branch history is a full audit log.
+The shared tab lives in Supabase (the `helm` project), in a `tab` schema the API doesn't expose. The app only reaches it through one function, `public.tab_sync(p_key, p_entries)`: it checks the passcode, merges in what the phone sends (new entries are added, deletions win, nothing is ever hard-deleted) and returns every entry. The app syncs on open, whenever it comes back to the foreground, and a few seconds after each change.
 
-- **Reading** works for anyone (the repo is public).
-- **Saving** needs a token, once per phone: create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with access to only this repo and **Contents: Read and write**, then paste it into Settings → GitHub token. It's stored in that browser only.
-- If both phones save at once, the app pulls the other side, merges (new entries are added, deletions win) and saves again.
+- **Set up a phone** once: open an invite link (Settings → Share invite link on a phone that's already set up), or paste the passcode into Settings → Passcode. On iPhone, a Home Screen app keeps its own storage, so paste the passcode in there too.
+- Both phones saving at once is fine; the server merges atomically.
 - Offline changes stay on the phone and save next time it's online.
+- **Change the passcode** in the Supabase SQL editor, then re-enter it on both phones:
+  ```sql
+  update tab.config set key_hash = encode(sha256(convert_to('new-passcode', 'UTF8')), 'hex');
+  ```
+
+The app's Supabase key is the publishable one; without the passcode it can't read or write anything.
 
 **Export / Import backup** saves or merges a `.json` file.
 

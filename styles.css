@@ -582,8 +582,8 @@ button:disabled { cursor: default; }
 .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); flex: none; }
 .sync-pill[data-status="ok"] .sync-dot { background: #30a46c; }
 .sync-pill[data-status="error"] .sync-dot { background: var(--danger); }
-.sync-pill[data-status="readonly"] .sync-dot { background: #f5a524; }
-.sync-pill[data-status="error"], .sync-pill[data-status="readonly"] { color: var(--text-2); }
+.sync-pill[data-status="locked"] .sync-dot { background: #f5a524; }
+.sync-pill[data-status="error"], .sync-pill[data-status="locked"] { color: var(--text-2); }
 .sync-pill[data-status="syncing"] .sync-dot,
 .sync-pill[data-status="pending"] .sync-dot { animation: pulse 1s ease-in-out infinite alternate; }
 @keyframes pulse { to { opacity: 0.3; } }
