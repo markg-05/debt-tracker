@@ -39,6 +39,7 @@
   // ───────── State ─────────
 
   const DEFAULT_NAMES = { a: 'Mark', b: 'Milo' };
+  const ME_KEY = 'marker.me';
 
   let state = load();
   const draft = { kind: 'debt', from: 'b', tag: null, method: null };
@@ -56,6 +57,13 @@
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
   }
 
+  // whose phone this is; each entry needs an OK from both, and adding it is one
+  let me = (() => { try { return ['a', 'b'].includes(localStorage.getItem(ME_KEY)) ? localStorage.getItem(ME_KEY) : null; } catch { return null; } })();
+  function setMe(seat) {
+    me = seat;
+    try { localStorage.setItem(ME_KEY, seat); } catch {}
+  }
+
   const other = (p) => (p === 'a' ? 'b' : 'a');
   const name = (p) => state.players[p] || DEFAULT_NAMES[p];
   // two letters when both names start the same (Mark & Milo → Ma, Mi)
@@ -66,11 +74,15 @@
     return mine.charAt(0).toUpperCase() + mine.slice(1, n).toLowerCase() || '?';
   };
   const live = () => state.entries.filter((e) => !e.deleted).sort((x, y) => x.ts - y.ts);
+  // only entries both have approved count toward the balance
+  const counted = () => live().filter((e) => e.approved);
+  const pending = () => live().filter((e) => !e.approved);
+  const approverOf = (e) => other(e.by);
 
   // > 0 means b owes a; < 0 means a owes b.
   // A debt from X adds to X's side; a payment from X takes off X's side.
   const delta = (e) => (e.kind === 'debt' ? 1 : -1) * (e.from === 'b' ? 1 : -1) * e.amount;
-  const balance = () => live().reduce((sum, e) => sum + delta(e), 0);
+  const balance = () => counted().reduce((sum, e) => sum + delta(e), 0);
   const debtorOf = (net) => (net > 0 ? 'b' : net < 0 ? 'a' : null);
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -132,6 +144,7 @@
     note: $('#note'),
     submit: $('#submitBtn'),
     composer: $('#composer'),
+    pending: $('#pending'),
     count: $('#count'),
     filters: $('#filters'),
     summary: $('#filterSummary'),
@@ -241,8 +254,49 @@
 
   // ───────── Render: history ─────────
 
+  // ───────── Render: waiting for approval ─────────
+
+  function rowHTML(e, aside) {
+    const label = labelOf(e);
+    const subPrefix = e.note && label ? `${esc(label)} · ` : '';
+    return `
+        <button type="button" class="row${e.id === freshId ? ' fresh' : ''}" data-id="${e.id}">
+          <span class="row-icon${e.kind === 'payout' ? ' payout' : ''}">${icon(iconOf(e))}</span>
+          <span class="row-main">
+            <span class="row-title">${esc(titleOf(e))}</span>
+            <span class="row-sub">${subPrefix}${esc(sentence(e))} · ${timeLabel(e.ts)}</span>
+          </span>
+          <span class="row-amt">
+            <span class="amt">${money(e.amount)}</span>
+            ${aside}
+          </span>
+        </button>`;
+  }
+
+  function renderPending() {
+    const list = pending().reverse();
+    el.pending.hidden = !list.length;
+    if (!list.length) { el.pending.innerHTML = ''; return; }
+    const mine = list.filter((e) => approverOf(e) === me).length;
+    el.pending.innerHTML = `
+      <div class="pending-head">
+        <h2>Needs approval</h2>
+        <span class="count">${mine ? `${mine} for you` : `${list.length} waiting`}</span>
+      </div>` + list.map((e) => {
+      const mineToApprove = approverOf(e) === me;
+      const aside = `<span class="wait">${mineToApprove ? 'Needs your OK' : `Waiting for ${esc(name(approverOf(e)))}`}</span>`;
+      return `<div class="pending-item">${rowHTML(e, aside)}${mineToApprove ? `
+        <div class="pending-actions">
+          <button type="button" class="secondary" data-reject="${e.id}">Reject</button>
+          <button type="button" class="primary" data-approve="${e.id}">Approve</button>
+        </div>` : ''}</div>`;
+    }).join('');
+  }
+
+  // ───────── Render: history ─────────
+
   function renderHistory() {
-    const all = live();
+    const all = counted();
     let run = 0;
     const rows = all.map((e) => ({ e, run: (run += delta(e)) }));
 
@@ -280,7 +334,9 @@
     }
 
     if (!all.length) {
-      el.ledger.innerHTML = `<div class="empty"><strong>No entries yet</strong>Add the first one above.</div>`;
+      el.ledger.innerHTML = pending().length
+        ? `<div class="empty"><strong>Nothing approved yet</strong>Entries show up here once you both OK them.</div>`
+        : `<div class="empty"><strong>No entries yet</strong>Add the first one above.</div>`;
       return;
     }
 
@@ -289,31 +345,19 @@
     for (const { e, run } of shownRows) {
       const day = dayLabel(e.ts);
       if (day !== lastDay) { html += `<h3 class="day">${esc(day)}</h3>`; lastDay = day; }
-      const label = labelOf(e);
-      const subPrefix = e.note && label ? `${esc(label)} · ` : '';
       const lean = run / (Math.abs(run) + 5000);
       const runText = run ? `${name(debtorOf(run))} down ${money(run)}` : 'Even';
-      html += `
-        <button type="button" class="row${e.id === freshId ? ' fresh' : ''}" data-id="${e.id}">
-          <span class="row-icon${e.kind === 'payout' ? ' payout' : ''}">${icon(iconOf(e))}</span>
-          <span class="row-main">
-            <span class="row-title">${esc(titleOf(e))}</span>
-            <span class="row-sub">${subPrefix}${esc(sentence(e))} · ${timeLabel(e.ts)}</span>
-          </span>
-          <span class="row-amt">
-            <span class="amt">${money(e.amount)}</span>
-            <span class="mini" title="After this: ${esc(runText)}"><i style="left:${50 - lean * 46}%"></i></span>
-          </span>
-        </button>`;
+      html += rowHTML(e, `<span class="mini" title="After this: ${esc(runText)}"><i style="left:${50 - lean * 46}%"></i></span>`);
     }
     el.ledger.innerHTML = html;
-    freshId = null;
   }
 
   function render() {
     renderTable();
     renderComposer();
+    renderPending();
     renderHistory();
+    freshId = null;
   }
 
   // ───────── Toast ─────────
@@ -371,21 +415,45 @@
         <div><dt>${e.kind === 'payout' ? 'Method' : 'Tag'}</dt><dd>${label ? esc(label) : '—'}</dd></div>
         <div><dt>Note</dt><dd>${e.note ? esc(e.note) : '—'}</dd></div>
         <div><dt>When</dt><dd>${esc(d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }))}, ${timeLabel(e.ts)}</dd></div>
+        <div><dt>Approval</dt><dd>${e.approved ? 'Approved by both' : approverOf(e) === me ? 'Waiting for your OK' : `Waiting for ${esc(name(approverOf(e)))}`}</dd></div>
       </dl>
-      <button type="button" class="danger-btn" data-delete="${e.id}">Delete this entry</button>`;
+      ${!e.approved && approverOf(e) === me
+        ? `<div class="actions">
+        <button type="button" class="secondary" data-reject="${e.id}">Reject</button>
+        <button type="button" class="primary" data-approve="${e.id}">Approve</button>
+      </div>`
+        : `<button type="button" class="danger-btn" data-delete="${e.id}">Delete this entry</button>`}`;
     entryDlg.showModal();
   }
-  entryDlg.addEventListener('click', (ev) => {
-    const btn = ev.target.closest('[data-delete]');
-    const e = btn && state.entries.find((x) => x.id === btn.dataset.delete);
-    if (!e) return;
+  function remove(e, message) {
     e.deleted = Date.now();
     save();
-    entryDlg.close();
     render();
     changed();
-    toast('Entry deleted', () => { delete e.deleted; save(); render(); });
-  });
+    toast(message, () => { delete e.deleted; save(); render(); });
+  }
+  function approve(e) {
+    e.approved = Date.now();
+    freshId = e.id;
+    save();
+    buzz();
+    render();
+    changed();
+    toast(`Approved: ${sentence(e)} ${money(e.amount)}`, () => { delete e.approved; save(); render(); });
+  }
+  // approve / reject / delete, from the detail sheet or the approval list
+  function onEntryAction(ev) {
+    const btn = ev.target.closest('[data-delete], [data-approve], [data-reject]');
+    if (!btn) return false;
+    const id = btn.dataset.delete || btn.dataset.approve || btn.dataset.reject;
+    const e = state.entries.find((x) => x.id === id);
+    if (!e) return false;
+    if (entryDlg.open) entryDlg.close();
+    if (btn.dataset.approve) approve(e);
+    else remove(e, btn.dataset.reject ? 'Entry rejected' : 'Entry deleted');
+    return true;
+  }
+  entryDlg.addEventListener('click', onEntryAction);
 
   // settings
   const settings = $('#settings');
@@ -394,8 +462,25 @@
     $('#nameA').value = state.players.a;
     $('#nameB').value = state.players.b;
     $('#passcodeInput').value = getPasscode();
+    $('#whoBtn span').textContent = me ? `This is ${name(me)}’s phone` : 'Choose whose phone this is';
     settings.showModal();
   });
+
+  // whose phone is this?
+  const whoDlg = $('#whoami');
+  function askWho() {
+    $('#whoA').textContent = name('a');
+    $('#whoB').textContent = name('b');
+    whoDlg.returnValue = '';
+    whoDlg.showModal();
+    return new Promise((resolve) => {
+      whoDlg.addEventListener('close', () => {
+        if (['a', 'b'].includes(whoDlg.returnValue)) { setMe(whoDlg.returnValue); render(); }
+        resolve(me);
+      }, { once: true });
+    });
+  }
+  $('#whoBtn').addEventListener('click', () => { settings.close(); askWho(); });
   for (const [id, seat] of [['#nameA', 'a'], ['#nameB', 'b']]) {
     $(id).addEventListener('input', (e) => {
       state.players[seat] = e.target.value.trim() || DEFAULT_NAMES[seat];
@@ -445,6 +530,9 @@
     if (e.kind === 'debt') out.tag = TAG[e.tag] ? e.tag : null;
     else out.method = METHOD[e.method] ? e.method : null;
     if (e.deleted) out.deleted = Number(e.deleted) || Date.now();
+    if (['a', 'b'].includes(e.by)) out.by = e.by;
+    // entries from before approvals existed count as approved
+    if (e.approved || !out.by) out.approved = Number(e.approved) || e.ts;
     return out;
   }
 
@@ -454,8 +542,9 @@
     let changed = false;
     for (const e of list) {
       const cur = byId.get(e.id);
-      if (!cur) { byId.set(e.id, e); changed = true; }
-      else if (e.deleted && !cur.deleted) { cur.deleted = e.deleted; changed = true; }
+      if (!cur) { byId.set(e.id, e); changed = true; continue; }
+      if (e.deleted && !cur.deleted) { cur.deleted = e.deleted; changed = true; }
+      if (e.approved && !cur.approved) { cur.approved = e.approved; changed = true; }
     }
     if (changed) state.entries = [...byId.values()];
     return changed;
@@ -470,7 +559,7 @@
     const byId = new Map(remote.map((e) => [e.id, e]));
     return state.entries.filter((e) => {
       const r = byId.get(e.id);
-      return !r || (e.deleted && !r.deleted);
+      return !r || (e.deleted && !r.deleted) || (e.approved && !r.approved);
     });
   }
 
@@ -527,9 +616,10 @@
     clearTimeout(saveTimer);
     saveTimer = 0;
     if (syncing) { again = true; return syncing; }
+    // checked out here: returning inside the async body would clear `syncing` before it's set
+    if (!getPasscode()) { setStatus('locked'); return Promise.resolve(); }
     syncing = (async () => {
       try {
-        if (!getPasscode()) { setStatus('locked'); return; }
         setStatus('syncing');
         // the server merges atomically, so both phones saving at once is fine
         remote = await exchange(unsent().map(clean).filter(Boolean));
@@ -667,11 +757,12 @@
     renderSubmit();
   });
 
-  el.composer.addEventListener('submit', (e) => {
+  el.composer.addEventListener('submit', async (e) => {
     e.preventDefault();
     const cents = parseAmount();
     if (!cents) { el.amount.focus(); return; }
     if (draft.kind === 'payout' && !draft.method) return;
+    if (!me && !(await askWho())) return;
     const entry = {
       id: uid(),
       kind: draft.kind,
@@ -679,6 +770,7 @@
       amount: cents,
       note: el.note.value.trim(),
       ts: Date.now(),
+      by: me,
     };
     if (draft.kind === 'debt') entry.tag = draft.tag;
     else entry.method = draft.method;
@@ -694,7 +786,7 @@
     buzz();
     render();
     changed();
-    toast(`${sentence(entry)} ${money(cents)}`, () => {
+    toast(`Sent to ${name(other(me))} to approve`, () => {
       state.entries = state.entries.filter((x) => x.id !== entry.id);
       save();
       render();
@@ -722,6 +814,11 @@
     filter = b.dataset.filter;
     renderHistory();
   });
+  el.pending.addEventListener('click', (e) => {
+    if (onEntryAction(e)) return;
+    const row = e.target.closest('.row');
+    if (row) openEntry(row.dataset.id);
+  });
   el.ledger.addEventListener('click', (e) => {
     const row = e.target.closest('.row');
     if (row) openEntry(row.dataset.id);
@@ -742,6 +839,7 @@
 
   render();
   syncNow();
+  if (!me) askWho();
   // pick up the other phone's changes when coming back to the app
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !saveTimer) syncNow();

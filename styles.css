@@ -91,14 +91,14 @@ button:disabled { cursor: default; }
   .app {
     max-width: 1040px;
     grid-template-columns: 420px minmax(0, 1fr);
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto auto auto 1fr;
     column-gap: 40px;
     align-items: start;
     padding-top: 32px;
   }
   .top { grid-column: 1 / -1; }
-  .table, .composer { grid-column: 1; }
-  .history { grid-column: 2; grid-row: 2 / span 2; padding-top: 0; }
+  .table, .pending, .composer { grid-column: 1; }
+  .history { grid-column: 2; grid-row: 2 / span 3; padding-top: 0; }
 }
 
 .card {
@@ -376,6 +376,28 @@ button:disabled { cursor: default; }
 .primary:disabled { background: var(--well); color: var(--text-3); }
 .secondary { background: var(--well); color: var(--text); font-weight: 500; }
 .secondary:hover { background: var(--hover); }
+
+/* ───────── Waiting for approval ───────── */
+
+.pending { padding: 14px 8px 6px; }
+.pending[hidden] { display: none; }
+.pending-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 0 8px 4px;
+}
+.pending h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.pending-item { position: relative; }
+.pending-item + .pending-item::before {
+  content: "";
+  position: absolute; top: 0; left: 56px; right: 8px;
+  height: 1px; background: var(--line-soft);
+}
+.pending-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 0 8px 10px 56px;
+}
+.pending-actions button { height: 38px; border-radius: var(--r-sm); font-size: 14px; }
+.wait { font-size: 12px; color: var(--text-3); white-space: nowrap; }
 
 /* ───────── History ───────── */
 
