@@ -65,6 +65,11 @@
   }
 
   const other = (p) => (p === 'a' ? 'b' : 'a');
+  // a new debt starts as the other person owing whoever's phone this is
+  function defaultDebtor() {
+    if (me) draft.from = other(me);
+  }
+  defaultDebtor();
   const name = (p) => state.players[p] || DEFAULT_NAMES[p];
   // two letters when both names start the same (Mark & Milo → Ma, Mi)
   const initial = (p) => {
@@ -475,7 +480,7 @@
     whoDlg.showModal();
     return new Promise((resolve) => {
       whoDlg.addEventListener('close', () => {
-        if (['a', 'b'].includes(whoDlg.returnValue)) { setMe(whoDlg.returnValue); render(); }
+        if (['a', 'b'].includes(whoDlg.returnValue)) { setMe(whoDlg.returnValue); if (draft.kind === 'debt') defaultDebtor(); render(); }
         resolve(me);
       }, { once: true });
     });
@@ -712,6 +717,7 @@
     // a payment almost always comes from whoever is behind
     const debtor = debtorOf(balance());
     if (draft.kind === 'payout' && debtor) draft.from = debtor;
+    if (draft.kind === 'debt') defaultDebtor();
     renderComposer();
   });
 
@@ -762,11 +768,12 @@
     const cents = parseAmount();
     if (!cents) { el.amount.focus(); return; }
     if (draft.kind === 'payout' && !draft.method) return;
+    const from = draft.from; // keep the direction on screen if this asks whose phone it is
     if (!me && !(await askWho())) return;
     const entry = {
       id: uid(),
       kind: draft.kind,
-      from: draft.from,
+      from,
       amount: cents,
       note: el.note.value.trim(),
       ts: Date.now(),
