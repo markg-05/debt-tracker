@@ -83,6 +83,9 @@
   const counted = () => live().filter((e) => e.approved);
   const pending = () => live().filter((e) => !e.approved);
   const approverOf = (e) => other(e.by);
+  // deleting an approved entry needs an OK too; it keeps counting until then
+  const deleteAsked = (e) => !e.deleted && e.delAsked > (e.delRefused || 0);
+  const deletions = () => counted().filter(deleteAsked);
 
   // > 0 means b owes a; < 0 means a owes b.
   // A debt from X adds to X's side; a payment from X takes off X's side.
@@ -280,14 +283,24 @@
 
   function renderPending() {
     const list = pending().reverse();
-    el.pending.hidden = !list.length;
-    if (!list.length) { el.pending.innerHTML = ''; return; }
-    const mine = list.filter((e) => approverOf(e) === me).length;
+    const dels = deletions().reverse();
+    const total = list.length + dels.length;
+    el.pending.hidden = !total;
+    if (!total) { el.pending.innerHTML = ''; return; }
+    const mine = list.filter((e) => approverOf(e) === me).length + dels.filter((e) => other(e.delBy) === me).length;
     el.pending.innerHTML = `
       <div class="pending-head">
         <h2>Needs approval</h2>
-        <span class="count">${mine ? `${mine} for you` : `${list.length} waiting`}</span>
-      </div>` + list.map((e) => {
+        <span class="count">${mine ? `${mine} for you` : `${total} waiting`}</span>
+      </div>` + dels.map((e) => {
+      const mineToApprove = other(e.delBy) === me;
+      const aside = `<span class="wait">${mineToApprove ? 'OK to delete?' : `Delete: waiting for ${esc(name(other(e.delBy)))}`}</span>`;
+      return `<div class="pending-item">${rowHTML(e, aside)}${mineToApprove ? `
+        <div class="pending-actions">
+          <button type="button" class="secondary" data-keep="${e.id}">Keep</button>
+          <button type="button" class="primary" data-confirm-delete="${e.id}">Delete</button>
+        </div>` : ''}</div>`;
+    }).join('') + list.map((e) => {
       const mineToApprove = approverOf(e) === me;
       const aside = `<span class="wait">${mineToApprove ? 'Needs your OK' : `Waiting for ${esc(name(approverOf(e)))}`}</span>`;
       return `<div class="pending-item">${rowHTML(e, aside)}${mineToApprove ? `
@@ -409,6 +422,8 @@
     if (!e) return;
     const d = new Date(e.ts);
     const label = labelOf(e);
+    const asked = deleteAsked(e);
+    const confirmer = asked ? other(e.delBy) : null;
     $('#entryBody').innerHTML = `
       <header class="sheet-head">
         <h3>${e.kind === 'payout' ? 'Payment' : 'Debt'}</h3>
@@ -421,14 +436,45 @@
         <div><dt>Note</dt><dd>${e.note ? esc(e.note) : '—'}</dd></div>
         <div><dt>When</dt><dd>${esc(d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }))}, ${timeLabel(e.ts)}</dd></div>
         <div><dt>Approval</dt><dd>${e.approved ? 'Approved by both' : approverOf(e) === me ? 'Waiting for your OK' : `Waiting for ${esc(name(approverOf(e)))}`}</dd></div>
+        ${asked ? `<div><dt>Delete</dt><dd>${confirmer === me ? 'Waiting for your OK' : `Waiting for ${esc(name(confirmer))}`}</dd></div>` : ''}
       </dl>
       ${!e.approved && approverOf(e) === me
         ? `<div class="actions">
         <button type="button" class="secondary" data-reject="${e.id}">Reject</button>
         <button type="button" class="primary" data-approve="${e.id}">Approve</button>
       </div>`
+        : asked && confirmer === me
+        ? `<div class="actions">
+        <button type="button" class="secondary" data-keep="${e.id}">Keep</button>
+        <button type="button" class="primary" data-confirm-delete="${e.id}">Delete</button>
+      </div>`
+        : asked
+        ? `<button type="button" class="danger-btn" data-keep="${e.id}">Cancel delete request</button>`
         : `<button type="button" class="danger-btn" data-delete="${e.id}">Delete this entry</button>`}`;
     entryDlg.showModal();
+  }
+  // leave the entry in place and ask the other person to OK removing it
+  async function askDelete(e) {
+    if (!me && !(await askWho())) return;
+    const before = { delAsked: e.delAsked, delBy: e.delBy };
+    markDeleteAsked(e);
+    save();
+    render();
+    changed();
+    toast(`Sent to ${name(other(me))} to approve`, () => { Object.assign(e, before); save(); render(); });
+  }
+  // times only move forward, so a phone that missed this can't bring back an older request
+  function markDeleteAsked(e) {
+    e.delAsked = Math.max(Date.now(), (e.delRefused || 0) + 1);
+    e.delBy = me;
+  }
+  function keep(e, message) {
+    const before = e.delRefused;
+    e.delRefused = Math.max(Date.now(), e.delAsked + 1);
+    save();
+    render();
+    changed();
+    toast(message, () => { e.delRefused = before; save(); render(); });
   }
   function remove(e, message) {
     e.deleted = Date.now();
@@ -448,13 +494,16 @@
   }
   // approve / reject / delete, from the detail sheet or the approval list
   function onEntryAction(ev) {
-    const btn = ev.target.closest('[data-delete], [data-approve], [data-reject]');
+    const btn = ev.target.closest('[data-delete], [data-approve], [data-reject], [data-keep], [data-confirm-delete]');
     if (!btn) return false;
-    const id = btn.dataset.delete || btn.dataset.approve || btn.dataset.reject;
+    const id = btn.dataset.delete || btn.dataset.approve || btn.dataset.reject || btn.dataset.keep || btn.dataset.confirmDelete;
     const e = state.entries.find((x) => x.id === id);
     if (!e) return false;
     if (entryDlg.open) entryDlg.close();
     if (btn.dataset.approve) approve(e);
+    else if (btn.dataset.keep) keep(e, e.delBy === me ? 'Delete request canceled' : 'Entry kept');
+    // an entry nobody has approved yet doesn't count, so it can go right away
+    else if (btn.dataset.delete && e.approved) askDelete(e);
     else remove(e, btn.dataset.reject ? 'Entry rejected' : 'Entry deleted');
     return true;
   }
@@ -496,15 +545,20 @@
 
   $('#wipeBtn').addEventListener('click', async () => {
     settings.close();
-    const ok = await ask('Clear everything?', 'Every debt and payment on this device will be removed. This can’t be undone.', 'Clear all', { danger: true });
+    if (!me && !(await askWho())) return;
+    const ok = await ask('Clear everything?', `Entries waiting for approval are removed now. ${name(other(me))} has to approve deleting the rest.`, 'Clear all', { danger: true });
     if (!ok) return;
     // tombstones, so the clear reaches the other phone too
     const now = Date.now();
-    for (const e of state.entries) if (!e.deleted) e.deleted = now;
+    for (const e of state.entries) {
+      if (e.deleted) continue;
+      if (!e.approved) e.deleted = now;
+      else if (!deleteAsked(e)) markDeleteAsked(e);
+    }
     save();
     render();
     changed();
-    toast('Cleared');
+    toast(`Sent to ${name(other(me))} to approve`);
   });
 
   // ───────── Sync ─────────
@@ -538,6 +592,8 @@
     if (['a', 'b'].includes(e.by)) out.by = e.by;
     // entries from before approvals existed count as approved
     if (e.approved || !out.by) out.approved = Number(e.approved) || e.ts;
+    if (e.delAsked && ['a', 'b'].includes(e.delBy)) { out.delAsked = Number(e.delAsked); out.delBy = e.delBy; }
+    if (e.delRefused) out.delRefused = Number(e.delRefused);
     return out;
   }
 
@@ -550,6 +606,8 @@
       if (!cur) { byId.set(e.id, e); changed = true; continue; }
       if (e.deleted && !cur.deleted) { cur.deleted = e.deleted; changed = true; }
       if (e.approved && !cur.approved) { cur.approved = e.approved; changed = true; }
+      if (e.delAsked > (cur.delAsked || 0)) { cur.delAsked = e.delAsked; cur.delBy = e.delBy; changed = true; }
+      if (e.delRefused > (cur.delRefused || 0)) { cur.delRefused = e.delRefused; changed = true; }
     }
     if (changed) state.entries = [...byId.values()];
     return changed;
@@ -564,7 +622,8 @@
     const byId = new Map(remote.map((e) => [e.id, e]));
     return state.entries.filter((e) => {
       const r = byId.get(e.id);
-      return !r || (e.deleted && !r.deleted) || (e.approved && !r.approved);
+      return !r || (e.deleted && !r.deleted) || (e.approved && !r.approved)
+        || e.delAsked > (r.delAsked || 0) || e.delRefused > (r.delRefused || 0);
     });
   }
 

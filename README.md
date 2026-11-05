@@ -10,7 +10,7 @@ Static HTML/CSS/JS, no build step, no server. Hosted on GitHub Pages.
 - Debts can be tagged (Poker, Blackjack, Food, Drinks, Ride, Tickets, Other) with an optional note.
 - Payments must be marked **Cash** or **E-transfer**.
 - **Settle up** — fills in a payment for the full balance; pick cash or e-transfer to record it.
-- **History** — grouped by day, filterable by tag or payments; the little rail on each row shows where the balance stood after that entry. Tap a row for details or to delete it (with undo).
+- **History** — grouped by day, filterable by tag or payments; the little rail on each row shows where the balance stood after that entry. Tap a row for details or to delete it. Deleting an approved entry needs the other person's OK, and it keeps counting until then.
 - Names default to Mark and Milo; change them in settings. Light/dark follows your device.
 - **Add to Home Screen** on your phone for an app-like feel.
 
