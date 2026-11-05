@@ -509,8 +509,8 @@
   // shared passcode, entered once per phone or opened from an invite link.
 
   const DB = {
-    url: 'https://drflsqoidhvdjlhlvxlk.supabase.co/rest/v1/rpc/tab_sync',
-    key: 'sb_publishable_WWqS2oOQAXrixTkwko5rlg_qZi9RHzd', // publishable; the passcode is the lock
+    url: 'https://mhttvkgwttkjiqayxorw.supabase.co/rest/v1/rpc/tab_sync',
+    key: 'sb_publishable_x5JIDRNi-RTFxjlWMLmX2w_jtj8gO6Z', // publishable; the passcode is the lock
   };
   const PASSCODE_KEY = 'marker.passcode';
   const SAVE_DELAY = 6000; // longer than the undo window, so undone actions never leave the device

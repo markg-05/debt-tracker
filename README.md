@@ -16,11 +16,12 @@ Static HTML/CSS/JS, no build step, no server. Hosted on GitHub Pages.
 
 ## Sync
 
-The shared tab lives in Supabase (the `helm` project), in a `tab` schema the API doesn't expose. The app only reaches it through one function, `public.tab_sync(p_key, p_entries)`: it checks the passcode, merges in what the phone sends (new entries are added, deletions win, nothing is ever hard-deleted) and returns every entry. The app syncs on open, whenever it comes back to the foreground, and a few seconds after each change.
+The shared tab lives in its own Supabase project on the Free plan, in a `tab` schema the API doesn't expose ([`schema.sql`](schema.sql) recreates it). The app only reaches it through one function, `public.tab_sync(p_key, p_entries)`: it checks the passcode, merges in what the phone sends (new entries are added, deletions win, nothing is ever hard-deleted) and returns every entry. The app syncs on open, whenever it comes back to the foreground, and a few seconds after each change.
 
 - **Set up a phone** once: open an invite link (Settings → Share invite link on a phone that's already set up), or paste the passcode into Settings → Passcode. On iPhone, a Home Screen app keeps its own storage, so paste the passcode in there too.
 - Both phones saving at once is fine; the server merges atomically.
 - Offline changes stay on the phone and save next time it's online.
+- **If sync stops working**, check whether Supabase paused the project. Free projects can pause after a week of low activity; resume it from the dashboard within 90 days.
 - **Change the passcode** in the Supabase SQL editor, then re-enter it on both phones:
   ```sql
   update tab.config set key_hash = encode(sha256(convert_to('new-passcode', 'UTF8')), 'hex');
